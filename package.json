@@ -1,0 +1,14 @@
+{
+  "name": "ev_yatayat_sewa_node",
+  "version": "1.0.0",
+  "description": "EV Yatayat Sewa Node",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.7.2",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  }
+}
