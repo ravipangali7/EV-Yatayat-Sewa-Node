@@ -6,7 +6,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 const axios = require('axios');
 
-const PORT = process.env.PORT || 3001;
+const PORT = 8001;
 const DJANGO_API_URL = (process.env.DJANGO_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 const RECORDINGS_PATH = path.resolve(process.env.RECORDINGS_PATH || './recordings');
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
