@@ -191,14 +191,17 @@ io.on('connection', (socket) => {
     startRecording(socket.id, groupId, socket.data.userId, socket.data.userToken);
   });
 
-  socket.on('ptt_audio', (chunk) => {
+  socket.on('ptt_audio', (payload) => {
     if (!socket.data.authenticated) return;
     const groupId = socket.data._pttGroupId;
-    if (groupId) {
-      const room = 'group:' + groupId;
-      socket.to(room).emit('ptt_audio', { userId: socket.data.userId, chunk });
-      writeRecordingChunk(socket.id, groupId, chunk);
-    }
+    if (!groupId) return;
+    const chunk = payload != null && typeof payload === 'object' && payload.chunk != null
+      ? payload.chunk
+      : payload;
+    if (chunk == null) return;
+    const room = 'group:' + groupId;
+    socket.to(room).emit('ptt_audio', { userId: socket.data.userId, chunk });
+    writeRecordingChunk(socket.id, groupId, chunk);
   });
 
   socket.on('ptt_end', (payload) => {
