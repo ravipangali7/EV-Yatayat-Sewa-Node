@@ -117,12 +117,13 @@ function endRecording(socketId, groupId) {
     rec.stream.end();
   }
   const endedAt = new Date().toISOString();
+  const relativePath = path.relative(RECORDINGS_PATH, rec.filePath);
   createRecordingMetadata(rec.userToken, {
     group_id: parseInt(rec.groupId, 10) || rec.groupId,
     user_id: rec.userId,
     started_at: rec.startedAt,
     ended_at: endedAt,
-    file_path: rec.filePath,
+    file_path: relativePath || path.basename(rec.filePath),
   });
 }
 
