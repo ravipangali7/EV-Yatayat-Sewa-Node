@@ -55,10 +55,29 @@ async function validateToken(token) {
 }
 
 async function createRecordingMetadata(token, payload) {
+  if (!token) {
+    console.warn('Create recording metadata: no token');
+    return;
+  }
+  const body = {
+    group_id: Number(payload.group_id),
+    user_id: Number(payload.user_id),
+    started_at: payload.started_at,
+    ended_at: payload.ended_at,
+    file_path: payload.file_path ?? null,
+    storage_key: payload.storage_key ?? null,
+    duration_seconds: payload.duration_seconds ?? null,
+    file_size_bytes: payload.file_size_bytes ?? null,
+    sample_rate: payload.sample_rate != null ? Math.round(Number(payload.sample_rate)) : 16000,
+  };
+  if (Number.isNaN(body.group_id) || Number.isNaN(body.user_id)) {
+    console.warn('Create recording metadata: invalid group_id or user_id', payload);
+    return;
+  }
   try {
     await axios.post(
       `${DJANGO_API_URL}/api/walkietalkie/recordings/`,
-      payload,
+      body,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +87,9 @@ async function createRecordingMetadata(token, payload) {
       }
     );
   } catch (err) {
-    console.warn('Create recording metadata error:', err.message);
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.warn('Create recording metadata error:', err.message, status ? `(${status})` : '', data ? JSON.stringify(data) : '');
   }
 }
 
