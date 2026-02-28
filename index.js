@@ -223,7 +223,10 @@ io.on('connection', (socket) => {
       : payload;
     if (chunk == null) return;
     const room = 'group:' + groupId;
-    socket.to(room).emit('ptt_audio', { userId: socket.data.userId, chunk });
+    const sampleRate = payload != null && typeof payload === 'object' && typeof payload.sampleRate === 'number'
+      ? payload.sampleRate
+      : undefined;
+    socket.to(room).emit('ptt_audio', { userId: socket.data.userId, chunk, sampleRate });
     writeRecordingChunk(socket.id, groupId, chunk);
   });
 
