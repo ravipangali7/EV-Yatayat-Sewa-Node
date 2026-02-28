@@ -43,6 +43,7 @@ async function validateToken(token) {
         username: res.data.username || '',
         name: res.data.name || '',
         groupIds: (res.data.group_ids || []).map(String),
+        isSuperuser: !!res.data.is_superuser,
       };
     }
   } catch (err) {
@@ -146,6 +147,7 @@ io.on('connection', (socket) => {
     socket.data.username = user.username;
     socket.data.name = user.name;
     socket.data.groupIds = user.groupIds || [];
+    socket.data.isSuperuser = user.isSuperuser || false;
     socket.data.userToken = token;
     if (typeof ack === 'function') ack({ success: true, user_id: user.userId, group_ids: user.groupIds });
   });
@@ -161,7 +163,11 @@ io.on('connection', (socket) => {
     const joined = [];
     for (const gid of groupIds) {
       const id = String(gid);
-      if (allowed.includes(id)) {
+      const isDirect = id.startsWith('direct:');
+      const allowedHere = isDirect
+        ? (socket.data.isSuperuser || id === 'direct:' + socket.data.userId)
+        : allowed.includes(id);
+      if (allowedHere) {
         socket.join('group:' + id);
         joined.push(id);
       }
@@ -176,7 +182,15 @@ io.on('connection', (socket) => {
       return;
     }
     const groupId = payload && payload.groupId != null ? String(payload.groupId) : null;
-    if (!groupId || !socket.data.groupIds.includes(groupId)) {
+    if (!groupId) {
+      socket.emit('error', { code: 'FORBIDDEN_GROUP', message: 'Not a member of this group' });
+      return;
+    }
+    const isDirect = groupId.startsWith('direct:');
+    const allowed = isDirect
+      ? (socket.data.isSuperuser || groupId === 'direct:' + socket.data.userId)
+      : socket.data.groupIds.includes(groupId);
+    if (!allowed) {
       socket.emit('error', { code: 'FORBIDDEN_GROUP', message: 'Not a member of this group' });
       return;
     }
