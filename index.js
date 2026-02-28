@@ -10,6 +10,8 @@ const PORT = 8001;
 const DJANGO_API_URL = (process.env.DJANGO_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 const RECORDINGS_PATH = path.resolve(process.env.RECORDINGS_PATH || './recordings');
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+/** For direct PTT, Django expects a group_id. Create a group named "Direct" in Django admin, add superusers as members, set DIRECT_GROUP_ID to its id. */
+const DIRECT_GROUP_ID = process.env.DIRECT_GROUP_ID ? parseInt(process.env.DIRECT_GROUP_ID, 10) : null;
 
 const app = express();
 const server = http.createServer(app);
@@ -118,13 +120,19 @@ function endRecording(socketId, groupId) {
   }
   const endedAt = new Date().toISOString();
   const relativePath = path.relative(RECORDINGS_PATH, rec.filePath);
-  createRecordingMetadata(rec.userToken, {
-    group_id: parseInt(rec.groupId, 10) || rec.groupId,
-    user_id: rec.userId,
-    started_at: rec.startedAt,
-    ended_at: endedAt,
-    file_path: relativePath || path.basename(rec.filePath),
-  });
+  const isDirect = String(rec.groupId).startsWith('direct:');
+  const groupIdForApi = isDirect && DIRECT_GROUP_ID
+    ? DIRECT_GROUP_ID
+    : (parseInt(rec.groupId, 10) || rec.groupId);
+  if (typeof groupIdForApi === 'number' && !Number.isNaN(groupIdForApi)) {
+    createRecordingMetadata(rec.userToken, {
+      group_id: groupIdForApi,
+      user_id: rec.userId,
+      started_at: rec.startedAt,
+      ended_at: endedAt,
+      file_path: relativePath || path.basename(rec.filePath),
+    });
+  }
 }
 
 io.on('connection', (socket) => {
