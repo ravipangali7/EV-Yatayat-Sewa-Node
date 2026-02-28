@@ -98,6 +98,7 @@ function startRecording(socketId, groupId, userId, userToken) {
     userToken,
     userId,
     groupId,
+    sampleRate: null,
   });
 }
 
@@ -131,6 +132,7 @@ function endRecording(socketId, groupId) {
       started_at: rec.startedAt,
       ended_at: endedAt,
       file_path: relativePath || path.basename(rec.filePath),
+      sample_rate: rec.sampleRate || 16000,
     });
   }
 }
@@ -226,6 +228,9 @@ io.on('connection', (socket) => {
     const sampleRate = payload != null && typeof payload === 'object' && typeof payload.sampleRate === 'number'
       ? payload.sampleRate
       : undefined;
+    const recKey = `${socket.id}_${groupId}`;
+    const rec = activeRecordings.get(recKey);
+    if (rec && sampleRate != null && rec.sampleRate == null) rec.sampleRate = sampleRate;
     socket.to(room).emit('ptt_audio', { userId: socket.data.userId, chunk, sampleRate });
     writeRecordingChunk(socket.id, groupId, chunk);
   });
