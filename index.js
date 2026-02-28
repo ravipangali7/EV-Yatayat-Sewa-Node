@@ -36,7 +36,7 @@ async function validateToken(token) {
   if (!token) return null;
   try {
     const res = await axios.get(`${DJANGO_API_URL}/api/walkietalkie/validate-token/`, {
-      params: { token },
+      headers: { Authorization: `Token ${token}` },
       timeout: 5000,
     });
     if (res.data && res.data.user_id != null) {
@@ -49,7 +49,9 @@ async function validateToken(token) {
       };
     }
   } catch (err) {
-    console.warn('Validate token error:', err.message);
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.warn('Validate token error:', err.message, status ? `(${status})` : '', data ? JSON.stringify(data) : '');
   }
   return null;
 }
@@ -59,11 +61,17 @@ async function createRecordingMetadata(token, payload) {
     console.warn('Create recording metadata: no token');
     return;
   }
+  // Normalize datetimes to ISO with +00:00 (Django/DRF parse reliably)
+  const toIso = (v) => {
+    if (v == null) return null;
+    const s = typeof v === 'string' ? v : (v instanceof Date ? v.toISOString() : null);
+    return s ? s.replace('Z', '+00:00') : null;
+  };
   const body = {
     group_id: Number(payload.group_id),
     user_id: Number(payload.user_id),
-    started_at: payload.started_at,
-    ended_at: payload.ended_at,
+    started_at: toIso(payload.started_at) || payload.started_at,
+    ended_at: toIso(payload.ended_at) || payload.ended_at,
     file_path: payload.file_path ?? null,
     storage_key: payload.storage_key ?? null,
     duration_seconds: payload.duration_seconds ?? null,
@@ -72,6 +80,10 @@ async function createRecordingMetadata(token, payload) {
   };
   if (Number.isNaN(body.group_id) || Number.isNaN(body.user_id)) {
     console.warn('Create recording metadata: invalid group_id or user_id', payload);
+    return;
+  }
+  if (!body.started_at || !body.ended_at) {
+    console.warn('Create recording metadata: missing started_at or ended_at', payload);
     return;
   }
   try {
