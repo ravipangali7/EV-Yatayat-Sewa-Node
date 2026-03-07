@@ -1,12 +1,48 @@
 const axios = require('axios');
 const config = require('../../config');
 
-async function validateToken(token) {
+const VALIDATE_URL = `${config.DJANGO_API_URL}/api/walkietalkie/validate-token/`;
+
+function isHtmlResponse(data) {
+  if (data == null) return false;
+  const s = typeof data === 'string' ? data : (data.toString && data.toString()) || '';
+  return s.trimStart().toLowerCase().startsWith('<!') || s.includes('</html>') || s.includes('cf-error');
+}
+
+function logValidateError(err, retried = false) {
+  const status = err.response?.status;
+  const data = err.response?.data;
+  const contentType = err.response?.headers?.['content-type'] || '';
+  if (status >= 500 || (status == null && err.code !== 'ECONNABORTED')) {
+    if (isHtmlResponse(data) || (contentType && contentType.includes('text/html'))) {
+      console.warn(
+        'Validate token: Django API unreachable (got HTML/5xx).',
+        'Check DJANGO_API_URL and that the backend is running behind Cloudflare.',
+        status ? `Status: ${status}` : err.message
+      );
+    } else {
+      console.warn('Validate token error:', err.message, status ? `(${status})` : '', retried ? '(after retry)' : '');
+    }
+    return;
+  }
+  if (status === 401) {
+    const detail = data && typeof data === 'object' && data.detail ? data.detail : 'Invalid token';
+    console.warn('Validate token: 401', typeof detail === 'string' ? detail : JSON.stringify(detail));
+    return;
+  }
+  const body = data != null && !isHtmlResponse(data) && contentType.includes('json')
+    ? (typeof data === 'object' ? JSON.stringify(data) : String(data))
+    : '';
+  console.warn('Validate token error:', err.message, status ? `(${status})` : '', body || '');
+}
+
+async function validateToken(token, retried = false) {
   if (!token) return null;
   try {
-    const res = await axios.get(`${config.DJANGO_API_URL}/api/walkietalkie/validate-token/`, {
+    const res = await axios.get(VALIDATE_URL, {
       headers: { Authorization: `Token ${token}` },
       timeout: 5000,
+      validateStatus: (s) => s === 200,
     });
     if (res.data && res.data.user_id != null) {
       return {
@@ -19,8 +55,12 @@ async function validateToken(token) {
     }
   } catch (err) {
     const status = err.response?.status;
-    const data = err.response?.data;
-    console.warn('Validate token error:', err.message, status ? `(${status})` : '', data ? JSON.stringify(data) : '');
+    logValidateError(err, retried);
+    // Retry once on 5xx or HTML (e.g. Cloudflare 521) to avoid flapping
+    if (!retried && (status >= 500 || isHtmlResponse(err.response?.data))) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return validateToken(token, true);
+    }
   }
   return null;
 }
