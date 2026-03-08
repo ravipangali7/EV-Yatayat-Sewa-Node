@@ -53,6 +53,41 @@ async function createRecordingMetadata(token, payload) {
   }
 }
 
+async function createDirectVoiceMessage(token, payload) {
+  if (!token) {
+    console.warn('Create direct voice message: no token');
+    return;
+  }
+  const { sender_id, recipient_id, file_path, duration_seconds, sample_rate } = payload;
+  if (sender_id == null || recipient_id == null || !file_path) {
+    console.warn('Create direct voice message: missing sender_id, recipient_id or file_path', payload);
+    return;
+  }
+  try {
+    await axios.post(
+      `${config.DJANGO_API_URL}/api/walkietalkie/direct-messages/`,
+      {
+        sender_id: Number(sender_id),
+        recipient_id: Number(recipient_id),
+        file_path: String(file_path),
+        duration_seconds: duration_seconds != null ? Number(duration_seconds) : null,
+        sample_rate: sample_rate != null ? Math.round(Number(sample_rate)) : null,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${token}`,
+        },
+        timeout: 5000,
+      }
+    );
+  } catch (err) {
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.warn('Create direct voice message error:', err.message, status ? `(${status})` : '', data ? JSON.stringify(data) : '');
+  }
+}
+
 function getRecordingPath(groupId, userId, startedAt) {
   const date = new Date(startedAt).toISOString().slice(0, 10);
   const ts = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
@@ -98,26 +133,39 @@ function endRecording(socketId, groupId) {
     rec.stream.end();
   }
   const endedAt = new Date().toISOString();
-  const relativePath = path.relative(config.RECORDINGS_PATH, rec.filePath);
+  const relativePath = path.relative(config.RECORDINGS_PATH, rec.filePath).replace(/\\/g, '/');
   const isDirect = String(rec.groupId).startsWith('direct:');
-  const groupIdForApi = isDirect && config.DIRECT_GROUP_ID
-    ? config.DIRECT_GROUP_ID
-    : (parseInt(rec.groupId, 10) || rec.groupId);
   const startMs = new Date(rec.startedAt).getTime();
   const endMs = new Date(endedAt).getTime();
   const durationSeconds = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
     ? (endMs - startMs) / 1000
     : null;
-  if (typeof groupIdForApi === 'number' && !Number.isNaN(groupIdForApi)) {
-    createRecordingMetadata(rec.userToken, {
-      group_id: groupIdForApi,
-      user_id: rec.userId,
-      started_at: rec.startedAt,
-      ended_at: endedAt,
-      file_path: relativePath || path.basename(rec.filePath),
-      sample_rate: rec.sampleRate || 16000,
-      duration_seconds: durationSeconds,
-    });
+
+  if (isDirect) {
+    const driverIdRaw = String(rec.groupId).replace(/^direct:/, '');
+    const recipientId = parseInt(driverIdRaw, 10);
+    if (!Number.isNaN(recipientId)) {
+      createDirectVoiceMessage(rec.userToken, {
+        sender_id: rec.userId,
+        recipient_id: recipientId,
+        file_path: relativePath || path.basename(rec.filePath),
+        duration_seconds: durationSeconds,
+        sample_rate: rec.sampleRate || 48000,
+      });
+    }
+  } else {
+    const groupIdForApi = parseInt(rec.groupId, 10);
+    if (typeof groupIdForApi === 'number' && !Number.isNaN(groupIdForApi)) {
+      createRecordingMetadata(rec.userToken, {
+        group_id: groupIdForApi,
+        user_id: rec.userId,
+        started_at: rec.startedAt,
+        ended_at: endedAt,
+        file_path: relativePath || path.basename(rec.filePath),
+        sample_rate: rec.sampleRate || 16000,
+        duration_seconds: durationSeconds,
+      });
+    }
   }
 }
 
