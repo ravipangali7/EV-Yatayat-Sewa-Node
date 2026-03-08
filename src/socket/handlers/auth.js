@@ -96,10 +96,7 @@ function register(socket) {
     const joined = [];
     for (const gid of groupIds) {
       const id = String(gid);
-      const isDirect = id.startsWith('direct:');
-      const allowedHere = isDirect
-        ? (socket.data.isSuperuser || id === 'direct:' + socket.data.userId)
-        : allowed.includes(id);
+      const allowedHere = allowed.includes(id);
       if (allowedHere) {
         socket.join('group:' + id);
         joined.push(id);

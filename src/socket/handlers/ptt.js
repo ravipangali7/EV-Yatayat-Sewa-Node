@@ -182,7 +182,7 @@ function register(socket) {
     }
     const isDirect = groupId.startsWith('direct:');
     const allowed = isDirect
-      ? (socket.data.isSuperuser || groupId === 'direct:' + socket.data.userId)
+      ? (socket.data.isSuperuser || groupId === 'direct:' + socket.data.userId || socket.data.groupIds.includes(groupId))
       : socket.data.groupIds.includes(groupId);
     if (!allowed) {
       socket.emit('error', { code: 'FORBIDDEN_GROUP', message: 'Not a member of this group' });
